@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Instagram Unfollowers",
+  "version": "1.0.0",
+  "description": "See who doesn't follow you back on Instagram. Scan, filter, whitelist, and batch unfollow.",
+  "permissions": ["storage"],
+  "host_permissions": ["*://www.instagram.com/*"],
+  "action": {
+    "default_title": "Instagram Unfollowers"
+  },
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://www.instagram.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

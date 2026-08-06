@@ -1,0 +1,1 @@
+(()=>{"use strict";let e;chrome.action.onClicked.addListener(async()=>{if(void 0!==e)try{return void await chrome.windows.update(e,{focused:!0})}catch{e=void 0}const o=await chrome.windows.create({url:"popup.html",type:"popup",width:850,height:700});o.id&&(e=o.id)}),chrome.windows.onRemoved.addListener(o=>{o===e&&(e=void 0)}),console.info("[IU] Service worker started")})();

@@ -1,0 +1,27 @@
+{
+  "name": "instagram-unfollowers-extension",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chrome extension to see who doesn't follow you back on Instagram",
+  "scripts": {
+    "build": "webpack --mode production && cp src/popup/index.html dist/popup.html && cp manifest.json dist/manifest.json",
+    "dev": "webpack --mode development --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "preact": "^10.25.4"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.26.0",
+    "@babel/plugin-transform-react-jsx": "^7.25.9",
+    "@types/chrome": "^0.0.270",
+    "css-loader": "^6.11.0",
+    "sass": "^1.83.4",
+    "sass-loader": "^13.3.3",
+    "style-loader": "^3.3.4",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.7.3",
+    "webpack": "^5.97.1",
+    "webpack-cli": "^5.1.4"
+  }
+}
