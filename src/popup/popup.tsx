@@ -30,8 +30,38 @@ const DEFAULT_TIMINGS: Timings = {
 
 async function sendToContent(msg: { type: string; userIds?: string[] }) {
   const tabs = await chrome.tabs.query({ url: "*://www.instagram.com/*" });
-  if (!tabs[0]?.id) throw new Error("Open Instagram and try again.");
-  return chrome.tabs.sendMessage(tabs[0].id, msg);
+  if (tabs.length === 0) throw new Error("Open Instagram and try again.");
+
+  // Prefer the active tab, fall back to the first Instagram tab
+  const activeTab = tabs.find((t) => t.active) ?? tabs[0];
+  const tabId = activeTab.id!;
+
+  try {
+    // First attempt — content script should already be injected
+    return await chrome.tabs.sendMessage(tabId, msg);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+
+    // If the content script isn't loaded, inject it programmatically
+    if (message.includes("receiving end does not exist") || message.includes("Could not establish connection")) {
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          files: ["content.js"],
+        });
+        // Brief pause to let the content script initialize
+        await new Promise((r) => setTimeout(r, 100));
+        // Retry after injection
+        return await chrome.tabs.sendMessage(tabId, msg);
+      } catch (injectErr) {
+        throw new Error(
+          "Could not connect to Instagram. Please refresh the Instagram page and try again."
+        );
+      }
+    }
+
+    throw err;
+  }
 }
 
 function App() {
