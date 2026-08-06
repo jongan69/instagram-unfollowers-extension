@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import type { AppStorageState } from "../messages";
 import { loadWhitelist } from "../utils/storage";
 
@@ -12,11 +12,15 @@ interface Props {
 }
 
 export const ScanView = ({ state, onScan, onPauseToggle, scanningPaused, hasResults, onViewResults }: Props) => {
-  const whitelist = loadWhitelist();
+  const [whitelistCount, setWhitelistCount] = useState(0);
   const nonFollowers = state.results.filter((u) => !u.follows_viewer).length;
   const isIdle = state.status === "idle";
   const isScanning = state.status === "scanning" || state.status === "paused";
   const isDone = state.status === "scanning_done";
+
+  useEffect(() => {
+    loadWhitelist().then((w) => setWhitelistCount(w.length));
+  }, [state.results.length]); // Refresh whitelist count when results change
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -24,7 +28,7 @@ export const ScanView = ({ state, onScan, onPauseToggle, scanningPaused, hasResu
         <div className="scan-hero">
           <div className="scan-icon">🔍</div>
           <h2>Find non-followers</h2>
-          <p>Scans your following list via Instagram's API to identify who doesn&rsquo;t follow you back. All data stays in your browser.</p>
+          <p>Scans your following list via Instagram&rsquo;s API to identify who doesn&rsquo;t follow you back. All data stays in your browser.</p>
           <button className="btn btn-primary btn-lg" onClick={onScan}>Start Scan</button>
           <div className="scan-stats">
             <div><div className="num" style={{ color: "#a1a1aa" }}>—</div><div className="lbl">Following</div></div>
@@ -39,7 +43,7 @@ export const ScanView = ({ state, onScan, onPauseToggle, scanningPaused, hasResu
           <div className="stats-row">
             <div className="stat-card"><div className="stat-label">Following</div><div className="stat-value">{state.results.length}</div></div>
             <div className="stat-card danger"><div className="stat-label">Non-Followers</div><div className="stat-value">{nonFollowers}</div></div>
-            <div className="stat-card accent"><div className="stat-label">Whitelisted</div><div className="stat-value">{whitelist.length}</div></div>
+            <div className="stat-card accent"><div className="stat-label">Whitelisted</div><div className="stat-value">{whitelistCount}</div></div>
           </div>
 
           <div>

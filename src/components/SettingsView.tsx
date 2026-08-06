@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import type { Timings } from "../model/timings";
 import type { UserNode } from "../model/user";
 import { loadWhitelist, saveWhitelist, exportWhitelist, importWhitelist, clearWhitelist, mergeWhitelists } from "../utils/storage";
@@ -10,10 +10,14 @@ interface Props {
 }
 
 export const SettingsView = ({ timings, setTimings, onWhitelistUpdate }: Props) => {
-  const whitelist = loadWhitelist();
+  const [whitelist, setWhitelist] = useState<UserNode[]>([]);
   const [msg, setMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    loadWhitelist().then(setWhitelist);
+  }, []);
 
   const showMsg = (text: string, type: "success" | "error") => { setMsg({ text, type }); setTimeout(() => setMsg(null), 4000); };
 
@@ -66,7 +70,13 @@ export const SettingsView = ({ timings, setTimings, onWhitelistUpdate }: Props) 
           <div style={{ display: "flex", gap: 6 }}>
             <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => exportWhitelist(whitelist)} disabled={whitelist.length === 0}>Export</button>
             <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => fileRef.current?.click()}>Import</button>
-            <button className="btn btn-secondary" style={{ flex: 1, color: "#ef4444" }} onClick={() => { clearWhitelist(); onWhitelistUpdate([]); showMsg("Cleared", "success"); }} disabled={whitelist.length === 0}>Clear</button>
+            <button className="btn btn-secondary" style={{ flex: 1, color: "#ef4444" }}
+              onClick={async () => {
+                await clearWhitelist();
+                setWhitelist([]);
+                onWhitelistUpdate([]);
+                showMsg("Cleared", "success");
+              }} disabled={whitelist.length === 0}>Clear</button>
           </div>
 
           <div style={{ display: "flex", gap: 16, fontSize: 12, color: "#a1a1aa" }}>
@@ -84,14 +94,17 @@ export const SettingsView = ({ timings, setTimings, onWhitelistUpdate }: Props) 
               if (file) importWhitelist(file,
                 (imported) => {
                   const result = importMode === "merge" ? mergeWhitelists(whitelist, imported) : imported;
-                  saveWhitelist(result); onWhitelistUpdate(result);
+                  saveWhitelist(result).then(() => {
+                    setWhitelist(result);
+                    onWhitelistUpdate(result);
+                  });
                   showMsg(`${importMode === "merge" ? "Merged" : "Replaced"} ${imported.length} users`, "success");
                 },
                 (err) => showMsg(err, "error")
               );
             }} />
         </div>
-        <div className="text-muted mt-2">Whitelisted accounts are excluded from unfollow suggestions. Stored locally.</div>
+        <div className="text-muted mt-2">Whitelisted accounts are excluded from unfollow suggestions. Stored in browser storage.</div>
       </div>
     </div>
   );

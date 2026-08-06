@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import type { AppStorageState } from "../messages";
 import type { UserNode } from "../model/user";
 import type { ScanningFilter } from "../model/scanning-filter";
@@ -19,7 +19,13 @@ function hasNoPic(user: UserNode): boolean {
 
 export const ResultsView = ({ state, updateState, onUnfollow, isUnfollowing, isDone }: Props) => {
   const [localSearch, setLocalSearch] = useState(state.searchTerm);
-  const whitelist = loadWhitelist();
+  const [whitelist, setWhitelist] = useState<UserNode[]>([]);
+
+  // Load whitelist on mount and when results change (whitelist may have been modified externally)
+  useEffect(() => {
+    loadWhitelist().then(setWhitelist);
+  }, []);
+
   const whitelistIds = useMemo(() => new Set(whitelist.map((u) => u.id)), [whitelist]);
   const selectedSet = useMemo(() => new Set(state.selectedIds), [state.selectedIds]);
 
@@ -59,12 +65,13 @@ export const ResultsView = ({ state, updateState, onUnfollow, isUnfollowing, isD
     updateState({ selectedIds: [...state.selectedIds.filter((id) => !matchingIds.has(id)), ...matching.filter((u) => !selectedSet.has(u.id)).map((u) => u.id)] });
   };
 
-  const toggleWhitelist = (user: UserNode) => {
+  const toggleWhitelist = useCallback((user: UserNode) => {
     const updated = whitelistIds.has(user.id)
       ? whitelist.filter((w) => w.id !== user.id)
       : [...whitelist, user];
+    setWhitelist(updated);
     saveWhitelist(updated);
-  };
+  }, [whitelist, whitelistIds]);
 
   const filter = state.filter;
   const filters: [keyof ScanningFilter, string, boolean][] = [
@@ -82,7 +89,7 @@ export const ResultsView = ({ state, updateState, onUnfollow, isUnfollowing, isD
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
-      {/* Search + filter */}
+      {/* Search */}
       <div style={{ display: "flex", gap: 8 }}>
         <input className="search-input" placeholder="Search by name or username…" value={localSearch}
           onChange={(e) => { setLocalSearch((e.target as HTMLInputElement).value); updateState({ searchTerm: (e.target as HTMLInputElement).value }); }} />

@@ -1,6 +1,6 @@
 {
   "name": "instagram-unfollowers-extension",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Chrome extension to see who doesn't follow you back on Instagram",
   "author": "Jonathan Gan",

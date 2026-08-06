@@ -7,16 +7,22 @@ import {
 
 // ── Whitelist ──────────────────────────────────────────────────────────────
 
-export function loadWhitelist(): UserNode[] {
-  const raw = localStorage.getItem(WHITELISTED_RESULTS_STORAGE_KEY);
-  return raw === null ? [] : (JSON.parse(raw) as UserNode[]);
+export async function loadWhitelist(): Promise<UserNode[]> {
+  const stored = await chrome.storage.local.get(WHITELISTED_RESULTS_STORAGE_KEY);
+  const raw = stored[WHITELISTED_RESULTS_STORAGE_KEY];
+  if (typeof raw !== "string") return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as UserNode[]) : [];
+  } catch {
+    return [];
+  }
 }
 
-export function saveWhitelist(users: readonly UserNode[]): void {
-  localStorage.setItem(
-    WHITELISTED_RESULTS_STORAGE_KEY,
-    JSON.stringify(users)
-  );
+export async function saveWhitelist(users: readonly UserNode[]): Promise<void> {
+  await chrome.storage.local.set({
+    [WHITELISTED_RESULTS_STORAGE_KEY]: JSON.stringify(users),
+  });
 }
 
 export function exportWhitelist(users: readonly UserNode[]): void {
@@ -73,7 +79,7 @@ export function importWhitelist(
   reader.readAsText(file);
 }
 
-export function clearWhitelist(): void {
+export async function clearWhitelist(): Promise<void> {
   if (
     !confirm(
       "Are you sure you want to clear the entire whitelist? This action cannot be undone."
@@ -81,7 +87,7 @@ export function clearWhitelist(): void {
   ) {
     return;
   }
-  localStorage.removeItem(WHITELISTED_RESULTS_STORAGE_KEY);
+  await chrome.storage.local.remove(WHITELISTED_RESULTS_STORAGE_KEY);
 }
 
 export function mergeWhitelists(
@@ -101,9 +107,10 @@ const isTimings = (value: unknown): value is Timings => {
   return Object.values(value).every((t) => typeof t === "number");
 };
 
-export function loadTimings(): Timings | null {
-  const raw = localStorage.getItem(TIMINGS_STORAGE_KEY);
-  if (raw === null) return null;
+export async function loadTimings(): Promise<Timings | null> {
+  const stored = await chrome.storage.local.get(TIMINGS_STORAGE_KEY);
+  const raw = stored[TIMINGS_STORAGE_KEY];
+  if (typeof raw !== "string") return null;
   try {
     const parsed: unknown = JSON.parse(raw);
     return isTimings(parsed) ? parsed : null;
@@ -112,6 +119,8 @@ export function loadTimings(): Timings | null {
   }
 }
 
-export function saveTimings(timings: Timings): void {
-  localStorage.setItem(TIMINGS_STORAGE_KEY, JSON.stringify(timings));
+export async function saveTimings(timings: Timings): Promise<void> {
+  await chrome.storage.local.set({
+    [TIMINGS_STORAGE_KEY]: JSON.stringify(timings),
+  });
 }

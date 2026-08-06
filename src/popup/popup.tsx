@@ -6,7 +6,7 @@ import { STORAGE_KEY } from "../messages";
 import type { Timings } from "../model/timings";
 import type { UserNode } from "../model/user";
 import { DEFAULT_TIME_BETWEEN_SEARCH_CYCLES, DEFAULT_TIME_TO_WAIT_AFTER_FIVE_SEARCH_CYCLES, DEFAULT_TIME_BETWEEN_UNFOLLOWS, DEFAULT_TIME_TO_WAIT_AFTER_FIVE_UNFOLLOWS } from "../constants/constants";
-import { loadTimings, saveTimings, loadWhitelist, saveWhitelist } from "../utils/storage";
+import { loadTimings, saveTimings, saveWhitelist } from "../utils/storage";
 import { ScanView } from "../components/ScanView";
 import { ResultsView } from "../components/ResultsView";
 import { SettingsView } from "../components/SettingsView";
@@ -36,14 +36,22 @@ async function sendToContent(msg: { type: string; userIds?: string[] }) {
 
 function App() {
   const [state, setState] = useState<AppStorageState>(DEFAULT_STATE);
-  const [timings, setTimings] = useState<Timings>(loadTimings() ?? DEFAULT_TIMINGS);
+  const [timings, setTimings] = useState<Timings>(DEFAULT_TIMINGS);
+  const [timingsLoaded, setTimingsLoaded] = useState(false);
   const [scanningPaused, setScanningPaused] = useState(false);
   const [toast, setToast] = useState<{ show: boolean; text: string }>({ show: false, text: "" });
   const [activeTab, setActiveTab] = useState<Tab>("scan");
   const stateRef = useRef(state);
 
-  // Load persisted scan state on mount
+  // Load persisted state and timings on mount
   useEffect(() => {
+    // Load timings from chrome.storage
+    loadTimings().then((t) => {
+      if (t) setTimings(t);
+      setTimingsLoaded(true);
+    });
+
+    // Load scan state
     chrome.storage.local.get(STORAGE_KEY).then((stored) => {
       if (stored[STORAGE_KEY]) {
         const ss = stored[STORAGE_KEY] as AppStorageState;
@@ -64,7 +72,9 @@ function App() {
     return () => chrome.storage.local.onChanged.removeListener(onChange);
   }, []);
 
-  useEffect(() => { saveTimings(timings); }, [timings]);
+  useEffect(() => {
+    if (timingsLoaded) saveTimings(timings);
+  }, [timings, timingsLoaded]);
   useEffect(() => { stateRef.current = state; }, [state]);
 
   const updateState = useCallback((p: Partial<AppStorageState>) => setState((prev) => ({ ...prev, ...p })), []);
@@ -96,7 +106,7 @@ function App() {
     setState({ ...DEFAULT_STATE }); setScanningPaused(false); setActiveTab("scan");
   };
 
-  const onWhitelistUpdate = (users: readonly UserNode[]) => { saveWhitelist(users); };
+  const onWhitelistUpdate = useCallback((users: readonly UserNode[]) => { saveWhitelist(users); }, []);
 
   const isScanning = state.status === "scanning" || state.status === "paused";
   const hasResults = state.status === "scanning_done" || (state.status === "scanning" && state.results.length > 0);

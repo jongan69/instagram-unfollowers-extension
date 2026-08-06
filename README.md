@@ -47,7 +47,7 @@ A Chrome extension that helps you find who doesn't follow you back on Instagram 
 ## Usage
 
 1. **Open Instagram** in Chrome (`www.instagram.com`) and log in
-2. **Click the extension icon** in your toolbar — this opens the Unfollowers app
+2. **Click the extension icon** in your toolbar — the Unfollowers dropdown opens
 3. **Click "Start Scan"** — the extension will fetch your following list through Instagram's API. The scan speed respects Instagram's rate limits by adding delays between requests.
 4. **Review results** — Switch to the Results tab to see all non-followers
 5. **Filter and select** — Use the filter chips to narrow results. Select individual users or use quick-select buttons for verified/private/no-pic accounts
