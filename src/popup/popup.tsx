@@ -9,7 +9,6 @@ import { DEFAULT_TIME_BETWEEN_SEARCH_CYCLES, DEFAULT_TIME_TO_WAIT_AFTER_FIVE_SEA
 import { loadTimings, saveTimings, loadWhitelist, saveWhitelist } from "../utils/storage";
 import { ScanView } from "../components/ScanView";
 import { ResultsView } from "../components/ResultsView";
-import { UnfollowView } from "../components/UnfollowView";
 import { SettingsView } from "../components/SettingsView";
 import { Toast } from "../components/Toast";
 

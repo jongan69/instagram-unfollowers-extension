@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from "react";
 import type { AppStorageState } from "../messages";
 import type { UserNode } from "../model/user";
-import { loadWhitelist } from "../utils/storage";
+import type { ScanningFilter } from "../model/scanning-filter";
+import { loadWhitelist, saveWhitelist } from "../utils/storage";
 import { WITHOUT_PROFILE_PICTURE_URL_IDS } from "../constants/constants";
 
 interface Props {
@@ -62,21 +63,21 @@ export const ResultsView = ({ state, updateState, onUnfollow, isUnfollowing, isD
     const updated = whitelistIds.has(user.id)
       ? whitelist.filter((w) => w.id !== user.id)
       : [...whitelist, user];
-    localStorage.setItem("iu_whitelisted-results", JSON.stringify(updated));
+    saveWhitelist(updated);
   };
 
   const filter = state.filter;
-  const filters = [
+  const filters: [keyof ScanningFilter, string, boolean][] = [
     ["showNonFollowers", "Non-followers", filter.showNonFollowers],
     ["showFollowers", "Followers", filter.showFollowers],
     ["showVerified", "Verified", filter.showVerified],
     ["showPrivate", "Private", filter.showPrivate],
     ["showWithOutProfilePicture", "No pic", filter.showWithOutProfilePicture],
-  ] as const;
+  ];
 
-  const toggleFilter = (key: string) => {
+  const toggleFilter = (key: keyof ScanningFilter) => {
     if (state.selectedIds.length > 0 && !confirm("Changing filters will clear selection.")) return;
-    updateState({ selectedIds: [], filter: { ...state.filter, [key]: !(state.filter as any)[key] } });
+    updateState({ selectedIds: [], filter: { ...state.filter, [key]: !state.filter[key] } });
   };
 
   return (

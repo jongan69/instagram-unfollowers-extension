@@ -3,10 +3,20 @@
   "version": "1.0.0",
   "private": true,
   "description": "Chrome extension to see who doesn't follow you back on Instagram",
+  "author": "Jonathan Gan",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jongan69/instagram-unfollowers-extension"
+  },
+  "bugs": {
+    "url": "https://github.com/jongan69/instagram-unfollowers-extension/issues"
+  },
   "scripts": {
-    "build": "webpack --mode production && cp src/popup/index.html dist/popup.html && cp manifest.json dist/manifest.json",
+    "build": "npm run clean && webpack --mode production && cp src/popup/index.html dist/popup.html && cp manifest.json dist/manifest.json && cp -r public/icons dist/icons",
     "dev": "webpack --mode development --watch",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "package": "npm run build && VERSION=$(node -p \"require('./package.json').version\") && cd dist && zip -r ../instagram-unfollowers-v$VERSION.zip ."
   },
   "dependencies": {
     "preact": "^10.25.4"
