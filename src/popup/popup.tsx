@@ -48,9 +48,11 @@ async function sendToContent(msg: { type: string; userIds?: string[] }) {
         await chrome.scripting.executeScript({
           target: { tabId },
           files: ["content.js"],
+          world: "ISOLATED",
         });
-        // Brief pause to let the content script initialize
-        await new Promise((r) => setTimeout(r, 100));
+        // Wait for the content script to initialize its message listener
+        // The init() function retries every 50ms, so 300ms is plenty
+        await new Promise((r) => setTimeout(r, 300));
         // Retry after injection
         return await chrome.tabs.sendMessage(tabId, msg);
       } catch (injectErr) {

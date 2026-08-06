@@ -298,74 +298,89 @@ async function doUnfollow(userIds: string[]): Promise<void> {
 
 // ── Message handler ────────────────────────────────────────────────────────
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  const msg = message as { type: string; userIds?: string[] };
+function registerMessageHandler() {
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    const msg = message as { type: string; userIds?: string[] };
 
-  (async () => {
-    try {
-      switch (msg.type) {
-        case "START_SCAN": {
-          await loadState();
-          scanningPaused = false;
-          await doScan();
-          sendResponse({ success: true });
-          break;
-        }
-
-        case "PAUSE_SCAN": {
-          scanningPaused = true;
-          sendResponse({ success: true });
-          break;
-        }
-
-        case "RESUME_SCAN": {
-          scanningPaused = false;
-          sendResponse({ success: true });
-          break;
-        }
-
-        case "START_UNFOLLOW": {
-          await loadState();
-          if (msg.userIds && msg.userIds.length > 0) {
-            await doUnfollow(msg.userIds);
+    (async () => {
+      try {
+        switch (msg.type) {
+          case "START_SCAN": {
+            await loadState();
+            scanningPaused = false;
+            await doScan();
+            sendResponse({ success: true });
+            break;
           }
-          sendResponse({ success: true });
-          break;
-        }
 
-        case "STOP_UNFOLLOW": {
-          if (unfollowAbortController) {
-            unfollowAbortController.abort();
-            unfollowAbortController = null;
+          case "PAUSE_SCAN": {
+            scanningPaused = true;
+            sendResponse({ success: true });
+            break;
           }
-          if (scanAbortController) {
-            scanAbortController.abort();
-            scanAbortController = null;
+
+          case "RESUME_SCAN": {
+            scanningPaused = false;
+            sendResponse({ success: true });
+            break;
           }
-          await persistState({ status: "idle" });
-          sendResponse({ success: true });
-          break;
-        }
 
-        case "GET_STATUS": {
-          await loadState();
-          sendResponse(currentState);
-          break;
-        }
+          case "START_UNFOLLOW": {
+            await loadState();
+            if (msg.userIds && msg.userIds.length > 0) {
+              await doUnfollow(msg.userIds);
+            }
+            sendResponse({ success: true });
+            break;
+          }
 
-        default:
-          sendResponse({ error: "Unknown message type" });
+          case "STOP_UNFOLLOW": {
+            if (unfollowAbortController) {
+              unfollowAbortController.abort();
+              unfollowAbortController = null;
+            }
+            if (scanAbortController) {
+              scanAbortController.abort();
+              scanAbortController = null;
+            }
+            await persistState({ status: "idle" });
+            sendResponse({ success: true });
+            break;
+          }
+
+          case "GET_STATUS": {
+            await loadState();
+            sendResponse(currentState);
+            break;
+          }
+
+          default:
+            sendResponse({ error: "Unknown message type" });
+        }
+      } catch (e) {
+        console.error("[IU] Message handler error:", e);
+        await persistState({ status: "idle" });
+        sendResponse({ error: e instanceof Error ? e.message : "Internal error" });
       }
-    } catch (e) {
-      console.error("[IU] Message handler error:", e);
-      await persistState({ status: "idle" });
-      sendResponse({ error: e instanceof Error ? e.message : "Internal error" });
-    }
-  })();
+    })();
 
-  return true; // Keep message channel open for async response
-});
+    return true; // Keep message channel open for async response
+  });
+}
 
 // ── Init ───────────────────────────────────────────────────────────────────
 
-console.info("[IU] Content script loaded on Instagram");
+function init() {
+  if (typeof chrome === "undefined" || !chrome.runtime?.onMessage) {
+    // Extension APIs not available yet — retry after a short delay
+    // This handles edge cases where the content script loads before
+    // Chrome's extension runtime is fully initialized.
+    setTimeout(init, 50);
+    return;
+  }
+
+  registerMessageHandler();
+  console.info("[IU] Content script loaded on Instagram");
+}
+
+init();
