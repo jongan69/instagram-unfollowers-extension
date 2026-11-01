@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "outDir": ".test-build"
+  },
+  "include": [
+    "src/core/**/*.ts",
+    "src/agent/tools.ts",
+    "src/content/content.ts",
+    "src/background/service-worker.ts"
+  ]
+}

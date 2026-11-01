@@ -3,13 +3,14 @@ const path = require('path');
 module.exports = {
   entry: {
     popup: './src/popup/popup.tsx',
+    agent: './src/agent/index.ts',
     content: './src/content/content.ts',
     'service-worker': './src/background/service-worker.ts',
   },
   module: {
     rules: [
       {
-        test: /\.ts|\.tsx$/,
+        test: /\.tsx?$/,
         use: {
           loader: 'ts-loader',
           options: {
@@ -23,7 +24,7 @@ module.exports = {
       },
       {
         test: /\.s[ac]ss$/i,
-        use: ['style-loader', 'css-loader', 'sass-loader'],
+        use: ['style-loader', 'css-loader', {loader:'sass-loader',options:{api:'modern'}}],
       },
     ],
   },

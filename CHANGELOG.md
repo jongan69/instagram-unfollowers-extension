@@ -1,3 +1,29 @@
+## 1.2.0
+
+- Replace obsolete GraphQL list hashes with native REST relationship lists, web request headers, max_id pagination and stable pk_id/pk mapping, informed by davidarroyo1234/InstagramUnfollowers.
+- Require independent exact own-profile totals; reject truncated, empty-positive, malformed and stalled scans; preserve complete snapshots atomically.
+- Replace the obsolete unfollow route with the modern GraphQL request format, current in-page tokens, fresh batch relationship checks and verified outcomes. Preserve explicit single-use approval and stop on all restrictions.
+- Add responsive review workbench: readable status/progress, search, paginated accounts, protected connections, per-account reasons, exact-list approval, history and backups. Technical JSON is collapsed.
+- Preserve reason focus across polling; invalidate prepared lists when protected connections change; repair Stop for paused scans.
+- Retain manual operation without WebMCP, add current REST/browser regression coverage and include upstream MIT attribution in the package.
+
+## 1.1.1
+
+- Fix the reproduced Chrome 156 WebMCP document.domain registration error with extension cross-origin isolation.
+- Remove the mandatory mobile account-info preflight; validate closing counts with the web GraphQL interface.
+- Preserve safe HTTP/Retry-After diagnostics and persist a shared protective cooldown after 429; prevent immediate repeated starts.
+- Publish complete history, terminal job and UI atomically; reconcile stale dispatch receipts and cancel work on account switches.
+- Expand regression and installed-browser coverage; live Instagram enumeration remains unverified.
+
+## 1.1.0
+
+- Validate complete follower/following pagination and stable IDs; preserve history on errors and cancellation.
+- Separate current nonfollowers from earlier follower IDs now absent; keep causes inconclusive.
+- Add optional native WebMCP on an extension-owned Agent / Review tab, strict tools, job status and reload recovery.
+- Require exact-list approval, relationship rechecks, pacing and verification for cleanup; disable direct batch mutation.
+- Add local baseline import/export, status/setup guidance, focused tests and installed native API smoke verification.
+- Actual natural-language agent invocation and logged-in Instagram endpoint compatibility remain unverified; see VERIFICATION.md.
+
 # Changelog
 
 ## [1.0.1] - 2025-08-06

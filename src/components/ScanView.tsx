@@ -28,7 +28,7 @@ export const ScanView = ({ state, onScan, onPauseToggle, scanningPaused, hasResu
         <div className="scan-hero">
           <div className="scan-icon">🔍</div>
           <h2>Find non-followers</h2>
-          <p>Scans your following list via Instagram&rsquo;s API to identify who doesn&rsquo;t follow you back. All data stays in your browser.</p>
+          <p>Validates complete follower and following lists to identify who doesn&rsquo;t follow you back. All data stays in your browser.</p>
           <button className="btn btn-primary btn-lg" onClick={onScan}>Start Scan</button>
           <div className="scan-stats">
             <div><div className="num" style={{ color: "#a1a1aa" }}>—</div><div className="lbl">Following</div></div>

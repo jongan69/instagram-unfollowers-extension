@@ -116,8 +116,8 @@ export const ResultsView = ({ state, updateState, onUnfollow, isUnfollowing, isD
             <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={() => quickSelect((u) => hasNoPic(u))}>+ No Pic</button>
             <button className="btn btn-ghost" style={{ fontSize: 11, color: "#ef4444" }} onClick={() => updateState({ selectedIds: [] })}>Clear</button>
             <button className="btn btn-danger" style={{ fontSize: 11, padding: "4px 12px" }}
-              onClick={() => { if (confirm(`Unfollow ${state.selectedIds.length} users?`)) onUnfollow(state.selectedIds); }}>
-              Unfollow {state.selectedIds.length}
+              onClick={() => { onUnfollow(state.selectedIds); }}>
+              Review {state.selectedIds.length}
             </button>
           </div>
         </div>
@@ -138,7 +138,7 @@ export const ResultsView = ({ state, updateState, onUnfollow, isUnfollowing, isD
         {displayed.map((user) => (
           <div key={user.id} className={`user-row ${selectedSet.has(user.id) ? "selected" : ""}`} onClick={() => toggleUser(user.id)}>
             <input type="checkbox" className="user-checkbox" checked={selectedSet.has(user.id)} onChange={() => toggleUser(user.id)} onClick={(e) => e.stopPropagation()} />
-            <img className="user-avatar" src={user.profile_pic_url} alt={user.username} />
+            <img crossOrigin="anonymous" referrerPolicy="no-referrer" className="user-avatar" src={user.profile_pic_url} alt={user.username} />
             <div className="user-info">
               <div className="user-name">@{user.username}</div>
               <div className="user-fullname">{user.full_name}</div>

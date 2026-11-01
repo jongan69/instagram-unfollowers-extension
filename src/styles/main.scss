@@ -521,3 +521,9 @@ html, body {
     .lbl { font-size: 11px; color: $text-muted; }
   }
 }
+
+.connection-panel { padding: 13px 16px; border-bottom: 1px solid $border; display:flex;flex-direction:column;gap:7px;flex-shrink:0;
+ .connection-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.connection-title span{font-size:11px;color:#c7d2fe;background:#25283f;padding:3px 8px;border-radius:20px}
+ .connection-meta{font-size:11px;color:$text-secondary;line-height:1.5}.connection-error{font-size:11px;color:#fca5a5;line-height:1.5}.btn{align-self:flex-start;margin-top:2px}
+}
+button:focus-visible,input:focus-visible,a:focus-visible {outline:2px solid #a5b4fc;outline-offset:3px}

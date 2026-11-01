@@ -10,6 +10,8 @@ import { loadTimings, saveTimings, saveWhitelist } from "../utils/storage";
 import { ScanView } from "../components/ScanView";
 import { ResultsView } from "../components/ResultsView";
 import { SettingsView } from "../components/SettingsView";
+import { StatusPanel } from "../components/StatusPanel";
+import { send } from "../agent/client";
 import { Toast } from "../components/Toast";
 
 type Tab = "scan" | "results" | "settings";
@@ -29,41 +31,7 @@ const DEFAULT_TIMINGS: Timings = {
 };
 
 async function sendToContent(msg: { type: string; userIds?: string[] }) {
-  const tabs = await chrome.tabs.query({ url: "*://www.instagram.com/*" });
-  if (tabs.length === 0) throw new Error("Open Instagram and try again.");
-
-  // Prefer the active tab, fall back to the first Instagram tab
-  const activeTab = tabs.find((t) => t.active) ?? tabs[0];
-  const tabId = activeTab.id!;
-
-  try {
-    // First attempt — content script should already be injected
-    return await chrome.tabs.sendMessage(tabId, msg);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-
-    // If the content script isn't loaded, inject it programmatically
-    if (message.includes("receiving end does not exist") || message.includes("Could not establish connection")) {
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId },
-          files: ["content.js"],
-          world: "ISOLATED",
-        });
-        // Wait for the content script to initialize its message listener
-        // The init() function retries every 50ms, so 300ms is plenty
-        await new Promise((r) => setTimeout(r, 300));
-        // Retry after injection
-        return await chrome.tabs.sendMessage(tabId, msg);
-      } catch (injectErr) {
-        throw new Error(
-          "Could not connect to Instagram. Please refresh the Instagram page and try again."
-        );
-      }
-    }
-
-    throw err;
-  }
+  return send(msg.type);
 }
 
 function App() {
@@ -87,7 +55,8 @@ function App() {
     chrome.storage.local.get(STORAGE_KEY).then((stored) => {
       if (stored[STORAGE_KEY]) {
         const ss = stored[STORAGE_KEY] as AppStorageState;
-        setState((prev) => ({ ...prev, status: ss.status, percentage: ss.percentage, results: ss.results, unfollowLog: ss.unfollowLog }));
+        setScanningPaused(ss.status === "paused");
+        setState((prev) => ({ ...prev, status: ss.status, percentage: ss.percentage, results: ss.results ?? [], unfollowLog: ss.unfollowLog ?? [], error: ss.error }));
         if (ss.status === "scanning" || ss.status === "scanning_done" || ss.status === "paused") setActiveTab("scan");
         if (ss.status === "unfollowing" || ss.status === "done") setActiveTab("results");
       }
@@ -95,7 +64,8 @@ function App() {
     const onChange = (changes: Record<string, chrome.storage.StorageChange>) => {
       if (changes[STORAGE_KEY]?.newValue) {
         const incoming = changes[STORAGE_KEY].newValue as AppStorageState;
-        setState((prev) => ({ ...prev, status: incoming.status, percentage: incoming.percentage, results: incoming.results, unfollowLog: incoming.unfollowLog }));
+        setScanningPaused(incoming.status === "paused");
+        setState((prev) => ({ ...prev, status: incoming.status, percentage: incoming.percentage, results: incoming.results ?? [], unfollowLog: incoming.unfollowLog ?? [], error: incoming.error }));
         if (incoming.status === "scanning_done") setActiveTab("results");
         if (incoming.status === "done") setActiveTab("scan");
       }
@@ -116,7 +86,7 @@ function App() {
       setState((prev) => ({ ...prev, selectedIds: [], page: 1, status: "scanning" as const }));
       setActiveTab("scan");
       await sendToContent({ type: "START_SCAN" });
-    } catch (err) { setToast({ show: true, text: err instanceof Error ? err.message : String(err) }); }
+    } catch (err) { setState(prev => ({...prev, status:"idle"})); setToast({ show: true, text: err instanceof Error ? err.message : String(err) }); }
   };
 
   const onPauseToggle = async () => {
@@ -126,22 +96,22 @@ function App() {
   };
 
   const onUnfollow = async (userIds: string[]) => {
-    try { await sendToContent({ type: "START_UNFOLLOW", userIds }); }
+    try {
+      await send("instagram_prepare_unfollow", {candidates:userIds.map(id=>({id,reason:"Manually selected for cleanup in the extension. Review usefulness and personal connection before approving."}))});
+      await chrome.tabs.create({url:chrome.runtime.getURL("agent.html")});
+    }
     catch (err) { setToast({ show: true, text: err instanceof Error ? err.message : String(err) }); }
   };
 
-  const onReset = () => {
-    if (state.status === "scanning" || state.status === "unfollowing") {
-      if (!confirm("Active process running. Stop?")) return;
-      sendToContent({ type: "STOP_UNFOLLOW" }).catch(() => {});
-    }
-    setState({ ...DEFAULT_STATE }); setScanningPaused(false); setActiveTab("scan");
+  const onReset = async () => {
+    try {await sendToContent({type:"STOP_UNFOLLOW"});setScanningPaused(false);}
+    catch(err){setToast({show:true,text:err instanceof Error?err.message:String(err)})}
   };
 
   const onWhitelistUpdate = useCallback((users: readonly UserNode[]) => { saveWhitelist(users); }, []);
 
   const isScanning = state.status === "scanning" || state.status === "paused";
-  const hasResults = state.status === "scanning_done" || (state.status === "scanning" && state.results.length > 0);
+  const hasResults = state.results.length > 0 || state.status === "scanning_done";
   const isUnfollowing = state.status === "unfollowing";
   const isDone = state.status === "done";
 
@@ -164,6 +134,7 @@ function App() {
         </div>
       </header>
 
+      <StatusPanel error={state.error} />
       {/* Tabs */}
       <div className="tab-bar">
         <button className={`tab ${activeTab === "scan" ? "active" : ""}`} onClick={() => setActiveTab("scan")}>Scan</button>

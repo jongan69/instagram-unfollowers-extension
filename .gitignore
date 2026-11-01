@@ -3,3 +3,10 @@ dist/
 *.log
 .DS_Store
 *.zip
+
+._*
+.tooling/
+.test-build/
+.browser-profile/
+*.tmp
+instagram-baseline-*.json

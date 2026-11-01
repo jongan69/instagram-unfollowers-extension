@@ -39,6 +39,7 @@ export interface StatusPayload {
 export const STORAGE_KEY = "iu_app_state";
 
 export interface AppStorageState {
+  error?: string;
   status: string;
   percentage: number;
   results: UserNode[];
