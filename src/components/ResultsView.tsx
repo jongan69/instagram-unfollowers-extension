@@ -116,8 +116,8 @@ export const ResultsView = ({ state, updateState, onUnfollow, isUnfollowing, isD
             <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={() => quickSelect((u) => hasNoPic(u))}>+ No Pic</button>
             <button className="btn btn-ghost" style={{ fontSize: 11, color: "#ef4444" }} onClick={() => updateState({ selectedIds: [] })}>Clear</button>
             <button className="btn btn-danger" style={{ fontSize: 11, padding: "4px 12px" }}
-              onClick={() => { if (confirm(`Unfollow ${state.selectedIds.length} users?`)) onUnfollow(state.selectedIds); }}>
-              Unfollow {state.selectedIds.length}
+              onClick={() => { onUnfollow(state.selectedIds); }}>
+              Review {state.selectedIds.length}
             </button>
           </div>
         </div>

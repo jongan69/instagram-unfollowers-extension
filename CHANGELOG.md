@@ -1,3 +1,12 @@
+## 1.1.0
+
+- Validate complete follower/following pagination and stable IDs; preserve history on errors and cancellation.
+- Separate current nonfollowers from earlier follower IDs now absent; keep causes inconclusive.
+- Add optional native WebMCP on an extension-owned Agent / Review tab, strict tools, job status and reload recovery.
+- Require exact-list approval, relationship rechecks, pacing and verification for cleanup; disable direct batch mutation.
+- Add local baseline import/export, status/setup guidance, focused tests and installed native API smoke verification.
+- Actual natural-language agent invocation and logged-in Instagram endpoint compatibility remain unverified; see VERIFICATION.md.
+
 # Changelog
 
 ## [1.0.1] - 2025-08-06
