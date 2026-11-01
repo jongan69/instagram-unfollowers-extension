@@ -1,3 +1,11 @@
+## 1.1.1
+
+- Fix the reproduced Chrome 156 WebMCP document.domain registration error with extension cross-origin isolation.
+- Remove the mandatory mobile account-info preflight; validate closing counts with the web GraphQL interface.
+- Preserve safe HTTP/Retry-After diagnostics and persist a shared protective cooldown after 429; prevent immediate repeated starts.
+- Publish complete history, terminal job and UI atomically; reconcile stale dispatch receipts and cancel work on account switches.
+- Expand regression and installed-browser coverage; live Instagram enumeration remains unverified.
+
 ## 1.1.0
 
 - Validate complete follower/following pagination and stable IDs; preserve history on errors and cancellation.

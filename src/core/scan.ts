@@ -1,3 +1,4 @@
+import { InstagramRequestError, endpointLabel, retryAfterSeconds } from './instagram-error';
 /** Fail closed: a list is publishable only after every page and count agree. */
 export interface Account {
     id: string;
@@ -19,7 +20,7 @@ export const isId = (v: unknown): v is string => typeof v === 'string' && /^[1-9
 export function account(value: any): Account {
     if (!value || !isId(value.id) || typeof value.username !== 'string' || !/^[\w.]{1,30}$/.test(value.username))
         throw new Error('Malformed account');
-    return { ...(typeof value.is_private === 'boolean' ? {is_private:value.is_private} : {}), ...(typeof value.is_verified === 'boolean' ? {is_verified:value.is_verified} : {}), id: value.id, username: value.username, full_name: typeof value.full_name === 'string' ? value.full_name.slice(0, 200) : '', profile_pic_url: typeof value.profile_pic_url === 'string' && value.profile_pic_url.startsWith('https://') ? value.profile_pic_url : '' };
+    return { ...(typeof value.is_private === 'boolean' ? { is_private: value.is_private } : {}), ...(typeof value.is_verified === 'boolean' ? { is_verified: value.is_verified } : {}), id: value.id, username: value.username, full_name: typeof value.full_name === 'string' ? value.full_name.slice(0, 200) : '', profile_pic_url: typeof value.profile_pic_url === 'string' && value.profile_pic_url.startsWith('https://') ? value.profile_pic_url : '' };
 }
 export function wait(ms: number, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted();
@@ -33,11 +34,26 @@ export async function readJSON(url: string, signal: AbortSignal, init: RequestIn
     const timer = setTimeout(() => ac.abort(new Error('Request stalled (30 seconds). Retry later.')), 30000);
     try {
         const response = await fetcher(url, { ...init, credentials: 'include', signal: ac.signal });
-        if (!response.ok)
-            throw new Error(response.status === 429 ? 'Rate limited. Stop and retry later.' : `Instagram HTTP ${response.status}; relationship is inconclusive.`);
-        const json = await response.json();
+        if (!response.ok) {
+            const endpoint = endpointLabel(url);
+            const retry = retryAfterSeconds(response.headers?.get('Retry-After') ?? null);
+            throw new InstagramRequestError(response.status === 429
+                ? `Rate limited (HTTP 429) at ${endpoint}. No automatic retry. This response alone does not establish whether the restriction is endpoint-, account-, session-, or IP-specific.`
+                : `Instagram HTTP ${response.status} at ${endpoint}; relationship is inconclusive.`, { code: response.status === 429 ? 'RATE_LIMITED' : 'HTTP_ERROR', endpoint, httpStatus: response.status, ...(retry !== undefined ? { retryAfterSeconds: retry } : {}) });
+        }
+        if (typeof response.url === 'string' && /\/(accounts\/login|challenge|checkpoint)(?:\/|\?)/.test(response.url))
+            throw new InstagramRequestError('Instagram requires login or account verification. Stop and complete it in Instagram.', { code: 'AUTH_REQUIRED', endpoint: endpointLabel(url), httpStatus: response.status });
+        let json: any;
+        try {
+            json = await response.json();
+        }
+        catch {
+            throw new InstagramRequestError('Instagram returned a non-JSON API response. Check login and endpoint compatibility.', { code: 'NON_JSON_RESPONSE', endpoint: endpointLabel(url), httpStatus: response.status });
+        }
+        if (json && (['rate_limit_error', 'rate_limit', 'feedback_required'].includes(json.error_type) || /please wait a few minutes|try again later|rate limit/i.test(typeof json.message === 'string' ? json.message : '')))
+            throw new InstagramRequestError('Instagram returned a rate-limit or feedback restriction. No automatic retry.', { code: 'RATE_LIMITED', endpoint: endpointLabel(url), httpStatus: response.status });
         if (!json || json.errors || (json.status && json.status !== 'ok') || json.message)
-            throw new Error('Instagram rejected the request; log in or retry later.');
+            throw new InstagramRequestError('Instagram rejected the request; log in or retry later.', { code: 'API_REJECTED', endpoint: endpointLabel(url) });
         return json;
     }
     finally {
@@ -89,7 +105,7 @@ export async function collectPages(getPage: (cursor?: string) => Promise<any>, s
     throw new Error('Pagination safety limit exceeded');
 }
 export function validateSnapshot(raw: any, accountId: string): Snapshot {
-    if (!raw || Object.keys(raw).sort().join(',') !== 'accountId,capturedAt,complete,followers,following,schemaVersion' || raw.schemaVersion !== 1 || raw.complete !== true || !isId(accountId) || raw.accountId !== accountId || typeof raw.capturedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(raw.capturedAt) || !Number.isFinite(Date.parse(raw.capturedAt)) || Date.parse(raw.capturedAt) > Date.now() + 60000)
+    if (!raw || Object.keys(raw).sort().join(',') !== 'accountId,capturedAt,complete,followers,following,schemaVersion' || raw.schemaVersion !== 1 || raw.complete !== true || !isId(accountId) || raw.accountId !== accountId || typeof raw.capturedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(raw.capturedAt) || !Number.isFinite(Date.parse(raw.capturedAt)) || Date.parse(raw.capturedAt) > Date.now() + 60000 || new Date(raw.capturedAt).toISOString().replace('.000Z', 'Z') !== raw.capturedAt.replace('.000Z', 'Z'))
         throw new Error('Invalid baseline schema, timestamp, or account. Import a complete snapshot for the logged-in stable account ID.');
     for (const key of ['followers', 'following']) {
         if (!Array.isArray(raw[key]) || raw[key].length > 1000000)
@@ -97,7 +113,8 @@ export function validateSnapshot(raw: any, accountId: string): Snapshot {
         const ids = new Set();
         for (const item of raw[key]) {
             account(item);
-            if (Object.keys(item).some(k=>!['id','username','full_name','profile_pic_url','is_private','is_verified'].includes(k)) || ('is_private' in item && typeof item.is_private !== 'boolean') || ('is_verified' in item && typeof item.is_verified !== 'boolean') || typeof item.full_name !== 'string' || item.full_name.length > 200 || typeof item.profile_pic_url !== 'string' || (item.profile_pic_url !== '' && !item.profile_pic_url.startsWith('https://'))) throw new Error('Invalid baseline account schema');
+            if (Object.keys(item).some(k => !['id', 'username', 'full_name', 'profile_pic_url', 'is_private', 'is_verified'].includes(k)) || ('is_private' in item && typeof item.is_private !== 'boolean') || ('is_verified' in item && typeof item.is_verified !== 'boolean') || typeof item.full_name !== 'string' || item.full_name.length > 200 || typeof item.profile_pic_url !== 'string' || (item.profile_pic_url !== '' && !item.profile_pic_url.startsWith('https://')))
+                throw new Error('Invalid baseline account schema');
             if (ids.has(item.id))
                 throw new Error('Duplicate baseline account ID');
             ids.add(item.id);

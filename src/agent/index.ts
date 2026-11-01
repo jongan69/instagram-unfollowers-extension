@@ -6,10 +6,21 @@ const review = document.getElementById('review')!;
 const native = document.getElementById('native')!;
 const registration = new AbortController();
 const show = (value: any) => { output.textContent = JSON.stringify(value, null, 2); };
+let refreshing=false;
 async function refresh() {
+    if(refreshing)return;refreshing=true;
     try {
         const s = await send('instagram_get_status');
         status.textContent = JSON.stringify(s, null, 2);
+        for (const id of ['scan', 'prepare'])
+            (document.getElementById(id) as HTMLButtonElement).disabled = !!s.rateLimit || ['running', 'paused'].includes(s.job?.status);
+        // Result is a dispatch receipt; reconcile it to the terminal job instead of displaying stale 'running'.
+        try {
+            const prior = JSON.parse(output.textContent ?? 'null');
+            if (prior?.jobId && prior.jobId === s.job?.id)
+                show({ jobId: prior.jobId, ...s.job });
+        }
+        catch { /* No previous JSON result */ }
         review.replaceChildren();
         if (s.preparation) {
             const p = s.preparation;
@@ -29,33 +40,39 @@ async function refresh() {
             const approve = document.createElement('button');
             approve.textContent = p.approvedAt ? 'Approved — single use' : 'Approve this exact list';
             approve.disabled = !!p.approvedAt || !!p.consumed;
-            approve.onclick = async (e) => { if (!e.isTrusted)
-                return; try {
-                await send('APPROVE_PREPARATION', { preparationId: p.id });
-                await refresh();
-            }
-            catch (err) {
-                showError(err);
-            } };
+            approve.onclick = async (e) => {
+                if (!e.isTrusted)
+                    return;
+                try {
+                    await send('APPROVE_PREPARATION', { preparationId: p.id });
+                    await refresh();
+                }
+                catch (err) {
+                    showError(err);
+                }
+            };
             review.append(approve);
             const execute = document.createElement('button');
             execute.textContent = 'Execute approved list';
             execute.disabled = !p.approvedAt || !!p.consumed;
-            execute.onclick = async (e) => { if (!e.isTrusted)
-                return; try {
-                show(await send('instagram_execute_unfollow', { preparationId: p.id }));
-                await refresh();
-            }
-            catch (err) {
-                showError(err);
-            } };
+            execute.onclick = async (e) => {
+                if (!e.isTrusted)
+                    return;
+                try {
+                    show(await send('instagram_execute_unfollow', { preparationId: p.id }));
+                    await refresh();
+                }
+                catch (err) {
+                    showError(err);
+                }
+            };
             review.append(execute);
         }
     }
     catch (e) {
         status.textContent = e instanceof Error ? e.message : String(e);
         review.replaceChildren();
-    }
+    } finally {refreshing=false}
 }
 function showError(e: unknown) { show({ error: e instanceof Error ? e.message : String(e) }); }
 async function invoke(name: ToolName, input: any, signal?: AbortSignal) {
@@ -90,64 +107,81 @@ async function invoke(name: ToolName, input: any, signal?: AbortSignal) {
 })();
 window.addEventListener('pagehide', () => registration.abort(), { once: true });
 for (const [id, name] of [['scan', 'instagram_start_scan'], ['nonfollowers', 'instagram_get_nonfollowers'], ['compare', 'instagram_compare_snapshots']] as const) {
-    document.getElementById(id)!.onclick = async () => { try {
-        show(await invoke(name, {}));
+    document.getElementById(id)!.onclick = async () => {
+        try {
+            const result = await invoke(name, {});
+            show(result.jobId ? { ...result, note: 'Dispatch receipt only; the live status panel is authoritative.' } : result);
+            await refresh();
+        }
+        catch (e) {
+            showError(e);
+        }
+    };
+}
+document.getElementById('refresh')!.onclick = refresh;
+document.getElementById('cancel')!.onclick = async () => {
+    try {
+        const s = await send('instagram_get_status');
+        show(await send('instagram_cancel_scan', { jobId: s.job?.id }));
+        await refresh();
     }
     catch (e) {
         showError(e);
-    } };
-}
-document.getElementById('refresh')!.onclick = refresh;
-document.getElementById('cancel')!.onclick = async () => { try {
-    const s = await send('instagram_get_status');
-    show(await send('instagram_cancel_scan', { jobId: s.job?.id }));
-    await refresh();
-}
-catch (e) {
-    showError(e);
-} };
-document.getElementById('stop')!.onclick = async () => { try {
-    show(await send('STOP_UNFOLLOW'));
-    await refresh();
-}
-catch (e) {
-    showError(e);
-} };
-document.getElementById('prepare')!.onclick = async () => { try {
-    const candidates = JSON.parse((document.getElementById('candidates') as HTMLTextAreaElement).value);
-    show(await invoke('instagram_prepare_unfollow', { candidates }));
-}
-catch (e) {
-    showError(e);
-} };
-document.getElementById('export')!.onclick = async () => { try {
-    const snapshot = await send('EXPORT_BASELINE');
-    const url = URL.createObjectURL(new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `instagram-baseline-${snapshot.accountId}-${snapshot.capturedAt.slice(0, 10)}.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-catch (e) {
-    showError(e);
-} };
-document.getElementById('import')!.onchange = async (e) => { const el = e.target as HTMLInputElement; try {
-    const f = el.files?.[0];
-    if (!f)
-        return;
-    if (f.size > 20000000)
-        throw new Error('Baseline exceeds 20 MB');
-    const snapshot = JSON.parse(await f.text());
-    show(await send('IMPORT_BASELINE', { snapshot }));
-    await refresh();
-}
-catch (e) {
-    showError(e);
-}
-finally {
-    el.value = '';
-} };
-const timer = setInterval(() => { if (!document.hidden)
-    void refresh(); }, 3000);
+    }
+};
+document.getElementById('stop')!.onclick = async () => {
+    try {
+        show(await send('STOP_UNFOLLOW'));
+        await refresh();
+    }
+    catch (e) {
+        showError(e);
+    }
+};
+document.getElementById('prepare')!.onclick = async () => {
+    try {
+        const candidates = JSON.parse((document.getElementById('candidates') as HTMLTextAreaElement).value);
+        show(await invoke('instagram_prepare_unfollow', { candidates }));
+    }
+    catch (e) {
+        showError(e);
+    }
+};
+document.getElementById('export')!.onclick = async () => {
+    try {
+        const snapshot = await send('EXPORT_BASELINE');
+        const url = URL.createObjectURL(new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `instagram-baseline-${snapshot.accountId}-${snapshot.capturedAt.slice(0, 10)}.json`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+    catch (e) {
+        showError(e);
+    }
+};
+document.getElementById('import')!.onchange = async (e) => {
+    const el = e.target as HTMLInputElement;
+    try {
+        const f = el.files?.[0];
+        if (!f)
+            return;
+        if (f.size > 20000000)
+            throw new Error('Baseline exceeds 20 MB');
+        const snapshot = JSON.parse(await f.text());
+        show(await send('IMPORT_BASELINE', { snapshot }));
+        await refresh();
+    }
+    catch (e) {
+        showError(e);
+    }
+    finally {
+        el.value = '';
+    }
+};
+const timer = setInterval(() => {
+    if (!document.hidden)
+        void refresh();
+}, 3000);
 window.addEventListener('pagehide', () => clearInterval(timer), { once: true });
