@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Instagram Unfollowers",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "See who doesn't follow you back on Instagram. Scan, filter, whitelist, and batch unfollow.",
   "permissions": [
     "storage",

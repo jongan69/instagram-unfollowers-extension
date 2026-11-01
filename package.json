@@ -1,6 +1,6 @@
 {
   "name": "instagram-unfollowers-extension",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "private": true,
   "description": "Chrome extension to see who doesn't follow you back on Instagram",
   "author": "Jonathan Gan",
@@ -13,12 +13,13 @@
     "url": "https://github.com/jongan69/instagram-unfollowers-extension/issues"
   },
   "scripts": {
-    "build": "npm run clean && webpack --mode production && cp src/popup/index.html dist/popup.html && cp src/agent/index.html dist/agent.html && cp manifest.json dist/manifest.json && cp -r public/icons dist/icons",
+    "build": "npm run clean && webpack --mode production && cp src/popup/index.html dist/popup.html && cp src/agent/index.html dist/agent.html && cp manifest.json dist/manifest.json && cp -r public/icons dist/icons && cp LICENSE THIRD_PARTY_NOTICES.md dist/",
     "dev": "webpack --mode development --watch",
     "clean": "rm -rf dist",
     "package": "npm run build && VERSION=$(node -p \"require('./package.json').version\") && cd dist && rm -f ../instagram-unfollowers-v$VERSION.zip && zip -r ../instagram-unfollowers-v$VERSION.zip . -x \"._*\" \"*/._*\"",
     "test": "tsc -p tsconfig.test.json && node --test tests/*.test.cjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify": "npm test && npm run typecheck && npm run build"
   },
   "dependencies": {
     "preact": "^10.25.4"
@@ -35,5 +36,8 @@
     "typescript": "^5.7.3",
     "webpack": "^5.97.1",
     "webpack-cli": "^5.1.4"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

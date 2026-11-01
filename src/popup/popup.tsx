@@ -103,12 +103,9 @@ function App() {
     catch (err) { setToast({ show: true, text: err instanceof Error ? err.message : String(err) }); }
   };
 
-  const onReset = () => {
-    if (state.status === "scanning" || state.status === "unfollowing") {
-      if (!confirm("Active process running. Stop?")) return;
-      sendToContent({ type: "STOP_UNFOLLOW" }).catch(() => {});
-    }
-    setState({ ...DEFAULT_STATE }); setScanningPaused(false); setActiveTab("scan");
+  const onReset = async () => {
+    try {await sendToContent({type:"STOP_UNFOLLOW"});setScanningPaused(false);}
+    catch(err){setToast({show:true,text:err instanceof Error?err.message:String(err)})}
   };
 
   const onWhitelistUpdate = useCallback((users: readonly UserNode[]) => { saveWhitelist(users); }, []);

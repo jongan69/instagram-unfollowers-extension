@@ -37,22 +37,29 @@ export async function readJSON(url: string, signal: AbortSignal, init: RequestIn
         if (!response.ok) {
             const endpoint = endpointLabel(url);
             const retry = retryAfterSeconds(response.headers?.get('Retry-After') ?? null);
-            throw new InstagramRequestError(response.status === 429
-                ? `Rate limited (HTTP 429) at ${endpoint}. No automatic retry. This response alone does not establish whether the restriction is endpoint-, account-, session-, or IP-specific.`
-                : `Instagram HTTP ${response.status} at ${endpoint}; relationship is inconclusive.`, { code: response.status === 429 ? 'RATE_LIMITED' : 'HTTP_ERROR', endpoint, httpStatus: response.status, ...(retry !== undefined ? { retryAfterSeconds: retry } : {}) });
+            let softBlocked=false;
+            if([400,403].includes(response.status)){
+                try{const body=await response.json();softBlocked=body?.spam===true||/feedback_required|action_blocked|rate limit|please wait|try again later/i.test([body?.error_type,body?.message,...(Array.isArray(body?.errors)?body.errors.map((x:any)=>x?.message):[])].filter(x=>typeof x==='string').join(' '));}catch{if(ac.signal.aborted)throw ac.signal.reason;}
+            }
+
+            throw new InstagramRequestError((response.status === 429||softBlocked)
+                ? `Rate limited or action restricted (HTTP ${response.status}) at ${endpoint}. No automatic retry. This response alone does not establish whether the restriction is endpoint-, account-, session-, or IP-specific.`
+                : `Instagram HTTP ${response.status} at ${endpoint}; relationship is inconclusive.`, { code: (response.status === 429||softBlocked) ? 'RATE_LIMITED' : 'HTTP_ERROR', endpoint, httpStatus: response.status, ...(retry !== undefined ? { retryAfterSeconds: retry } : {}) });
         }
         if (typeof response.url === 'string' && /\/(accounts\/login|challenge|checkpoint)(?:\/|\?)/.test(response.url))
             throw new InstagramRequestError('Instagram requires login or account verification. Stop and complete it in Instagram.', { code: 'AUTH_REQUIRED', endpoint: endpointLabel(url), httpStatus: response.status });
         let json: any;
         try {
-            json = await response.json();
+            json = url.endsWith('/api/graphql') && typeof response.text==='function' ? JSON.parse((await response.text()).replace(/^for \(;;\);/,'')) : await response.json();
+            ac.signal.throwIfAborted();
         }
         catch {
+            if(ac.signal.aborted)throw ac.signal.reason;
             throw new InstagramRequestError('Instagram returned a non-JSON API response. Check login and endpoint compatibility.', { code: 'NON_JSON_RESPONSE', endpoint: endpointLabel(url), httpStatus: response.status });
         }
-        if (json && (['rate_limit_error', 'rate_limit', 'feedback_required'].includes(json.error_type) || /please wait a few minutes|try again later|rate limit/i.test(typeof json.message === 'string' ? json.message : '')))
+        if (json && (json.spam===true || ['rate_limit_error', 'rate_limit', 'feedback_required'].includes(json.error_type) || /please wait a few minutes|try again later|rate limit/i.test(typeof json.message === 'string' ? json.message : '')))
             throw new InstagramRequestError('Instagram returned a rate-limit or feedback restriction. No automatic retry.', { code: 'RATE_LIMITED', endpoint: endpointLabel(url), httpStatus: response.status });
-        if (!json || json.errors || (json.status && json.status !== 'ok') || json.message)
+        if (!json || (Array.isArray(json.errors)?json.errors.length>0:!!json.errors) || json.error || (json.status && json.status !== 'ok') || json.message)
             throw new InstagramRequestError('Instagram rejected the request; log in or retry later.', { code: 'API_REJECTED', endpoint: endpointLabel(url) });
         return json;
     }

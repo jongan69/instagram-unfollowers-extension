@@ -28,21 +28,42 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
                 const old = (await chrome.storage.local.get(STORAGE_KEY))[STORAGE_KEY] ?? {};
                 await chrome.storage.local.set({ iu_job: { ...saved, status: 'interrupted', complete: false, error, finishedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, [STORAGE_KEY]: { ...old, status: 'idle', error } });
             }
-            if (!alive?.alive) {
+            if (!alive?.alive || (alive.profileReady === false && !['running', 'paused'].includes(alive.job?.status))) {
                 const tabs = await chrome.tabs.query({ url: 'https://www.instagram.com/*' });
-                const tab = tabs.find(t => t.active) ?? tabs[0];
-                if (!tab?.id)
-                    throw new Error('Open https://www.instagram.com, log in, and refresh it.');
-                tabId = tab.id;
-                try {
-                    alive = await chrome.tabs.sendMessage(tabId, { type: 'PING' });
+                if (!tabs.length)
+                    throw new Error('Open Instagram, sign in and open your own profile.');
+                const accountId = alive?.accountId;
+                let chosen: any = alive?.alive ? { id: tabId, state: alive } : undefined;
+                const ordered = [...tabs].sort((a, b) => Number(!!b.active) - Number(!!a.active));
+                for (const tab of ordered) {
+                    if (tab.id === undefined)
+                        continue;
+                    let state: any;
+                    try {
+                        state = await chrome.tabs.sendMessage(tab.id, { type: 'PING' });
+                    }
+                    catch {
+                        try {
+                            await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'], world: 'ISOLATED' });
+                            state = await chrome.tabs.sendMessage(tab.id, { type: 'PING' });
+                        }
+                        catch {
+                            continue;
+                        }
+                    }
+                    if (!state?.alive || (accountId && state.accountId && accountId !== state.accountId))
+                        continue;
+                    if (!chosen)
+                        chosen = { id: tab.id, state };
+                    if (['running', 'paused'].includes(state.job?.status) || state.profileReady) {
+                        chosen = { id: tab.id, state };
+                        break;
+                    }
                 }
-                catch {
-                    await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'], world: 'ISOLATED' });
-                    alive = await chrome.tabs.sendMessage(tabId, { type: 'PING' });
-                }
-                if (!alive?.alive)
-                    throw new Error('Refresh Instagram to reconnect the extension');
+                if (!chosen)
+                    throw new Error('Refresh Instagram to reconnect the extension.');
+                tabId = chosen.id;
+                alive = chosen.state;
                 await chrome.storage.local.set({ iu_host_tab: tabId });
             }
             const result = await chrome.tabs.sendMessage(tabId!, message);

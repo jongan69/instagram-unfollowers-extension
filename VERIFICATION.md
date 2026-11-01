@@ -1,3 +1,35 @@
+# v1.2.0 REST migration and workbench verification
+
+## Reference comparison and implementation
+
+Inspected `davidarroyo1234/InstagramUnfollowers` at commit `86346ae`. Its source explicitly documents the legacy query_hash returning positive counts with empty edges, and implements native REST relationship lists with web headers and max_id pagination. It also uses the current GraphQL unfollow envelope rather than the legacy web route. Adopted request conventions are attributed in THIRD_PARTY_NOTICES.md, included in the release ZIP.
+
+The extension now uses native REST followers/following lists, stable pk_id/pk identities, independent own-profile counts, deduplicated pagination and atomic snapshot publication. Malformed, truncated, stalled and empty positive-count results fail. It does not adopt upstream's automatic restriction retries or username fallback matching. Cleanup uses fresh show_many checks, exact-list authorization, current in-page write tokens, a modern GraphQL request and post-request verification. Protecting a prepared account invalidates the list; protection added during dispatch pacing also prevents the write.
+
+## Source and build checks
+
+67 regression tests passed, plus typecheck, production build and package checks. Tests include REST identities/headers/cursors, absent last cursor at exact count, truncated and malformed lists, exact/abbreviated title counts, own-profile ownership checks, cancellation/count drift, failed atomic commits, account switching, ready-profile host selection across multiple Instagram tabs, cooldown persistence, approval replay/protection invalidation, anti-hijack JSON parsing, and a fully synthetic approved modern mutation verified with a fresh stable-ID relationship read. No test sends a real unfollow.
+
+The installed sass-loader now uses its supported modern API; production webpack builds complete without the prior deprecation warning. Existing Preact/TypeScript/webpack toolchain is retained. Compatible lockfile updates fixed four build-tool dependency advisories; npm audit reports zero vulnerabilities.
+
+## Installed extension / UI checks
+
+Browser tests pass on Chrome for Testing 156.0.8078.80 (including domain-keyed reproduction) and 159.0.8137.0 with native WebMCP, and on Chrome 159 with WebMCP disabled. The fallback still completes a synthetic scan through manual controls.
+
+Each browser run validates a complete multipage REST scan with the actual built worker/content-host boundary, rejection of incomplete results with baseline preservation, UI result rendering, search/select/reasons, reason-input focus across polling, exact-list preparation, unapproved execution rejection, account protection, 390px responsive layout, cooldown and reload reconciliation. All API responses are synthetic. Zero real Instagram API probes or mutations are sent by this test. The two native-enabled runs discover all eight tools and invoke read-only status through the native API. This is still not a natural-language agent invocation.
+
+Screenshots under ignored .tooling/workbench-*.png were visually inspected. The workbench uses human-readable cards, progress, account rows, protection and cleanup review; raw JSON is collapsed under Technical details.
+
+## Live observations (separate from extension verification)
+
+A normal Instagram Following dialog returned HTTP 200 from /api/v1/friendships/<id>/following/. The reference tool was observed finishing its relationship scan in the user's tab. No follow/unfollow controls were activated. A fresh native own-profile page matched the extension's actual main/edit-link/heading/count selectors, including exact title metadata for follower totals. Personal identities, relationship lists and session secrets were not committed.
+
+The installed user-extension reload and complete live scan remain pending user participation: this browser surface blocks extension-origin pages, so it cannot reload or operate the review tab. Actual natural-language invocation on extension-origin tabs and real mutation operation remain unverified. Private API shapes, page layouts and GraphQL mutation document IDs may change; all unsupported states fail closed. These remaining checks are why PR #7 remains a draft. Do not treat the synthetic contract tests as proof of completed live enumeration.
+
+---
+
+Historical implementation evidence below is retained; v1.2.0 supersedes the GraphQL list-fetcher and raw JSON review UI described there.
+
 # v1.1.1 audit follow-up
 
 The reported v1.1.0 failures exposed real gaps missed by the original Chrome 159-only synthetic smoke test. This audit does not claim zero bugs.

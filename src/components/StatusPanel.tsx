@@ -3,24 +3,31 @@ import { send } from '../agent/client';
 export function StatusPanel({ error }: {
     error?: string;
 }) {
-    const [status, setStatus] = useState('Checking Instagram…');
-    useEffect(() => {
-        let live = true; let inFlight=false;
-        const refresh = async () => {
-            if(inFlight)return;inFlight=true;
-            try {
-                const s = await send('instagram_get_status');
-                if (live)
-                    setStatus(`Account: ${s.accountId ?? 'logged out'} · Scan: ${s.job?.status ?? s.lastJob?.status ?? 'idle'} ${s.rateLimit ? ` · Local cooldown until ${new Date(s.rateLimit.until).toLocaleString()}` : ''} · Latest: ${s.latestAt ?? 'none'} · Baseline: ${s.baselineAt ?? 'first complete scan establishes history'}`);
-            }
-            catch (e) {
-                if (live)
-                    setStatus(e instanceof Error ? e.message : String(e));
-            } finally {inFlight=false}
-        };
-        void refresh();
-        const t = setInterval(refresh, 5000);
-        return () => { live = false; clearInterval(t); };
-    }, []);
-    return <section style={{ padding: 12, fontSize: 12 }} aria-label="Extension status"><div>{status}</div>{error && <div role="alert" style={{ color: '#fca5a5' }}>{error}</div>}<p>Native WebMCP availability is checked in Agent / Review. A browser exposing document.modelContext is required.</p><button className="btn btn-secondary" onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL('agent.html') })}>Open Agent / Review</button></section>;
+    const [data, setData] = useState<any>(null);
+    const [connectionError, setConnectionError] = useState('');
+    useEffect(() => { let live = true, pending = false; const refresh = async () => { if (pending)
+        return; pending = true; try {
+        const s = await send('instagram_get_status');
+        if (live) {
+            setData(s);
+            setConnectionError('');
+        }
+    }
+    catch (e) {
+        if (live)
+            setConnectionError(e instanceof Error ? e.message : String(e));
+    }
+    finally {
+        pending = false;
+    } }; void refresh(); const timer = setInterval(refresh, 5000); return () => { live = false; clearInterval(timer); }; }, []);
+    const job = data?.job ?? data?.lastJob;
+    return <section className="connection-panel" aria-label="Extension status">
+  <div className="connection-title"><strong>{data?.profile?.username ? `@${data.profile.username}` : data?.accountId ? 'Instagram connected' : 'Connect Instagram'}</strong><span>{job?.status ?? 'Ready'}</span></div>
+  <div className="connection-meta">{data?.latestAt ? `Complete snapshot · ${new Date(data.latestAt).toLocaleString()}` : 'No complete snapshot yet · your first scan establishes history'}</div>
+  {job && ['running', 'paused'].includes(job.status) && <div className="connection-meta">{job.phase} · {job.received} / {job.total || '…'} accounts</div>}
+  {data?.rateLimit && <div className="connection-error">Local cooldown until {new Date(data.rateLimit.until).toLocaleString()}. Instagram may require more time.</div>}
+  {(!data?.profile?.ready) && <div className="connection-meta">Open your own profile in Instagram and keep it open for exact-count validation.</div>}
+  {(connectionError || error) && <div role="alert" className="connection-error">{connectionError || error}</div>}
+  <button className="btn btn-secondary" onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL('agent.html') })}>Open Agent / Review</button>
+ </section>;
 }

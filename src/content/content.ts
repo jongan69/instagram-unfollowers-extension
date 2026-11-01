@@ -3,6 +3,7 @@ import { collectPages, readJSON, wait, isId, Snapshot, nonfollowers, compareSnap
 import { prepare, authorize, mutateOne, Preparation } from '../core/cleanup';
 import { trustedSender, validateInput, ToolName } from '../agent/tools';
 import { InstagramRequestError, RequestDiagnostic, cooldownUntil } from '../core/instagram-error';
+import { ownProfile, listURL, restPage, ListKind, webHeaders, unfollowRequest, batchRelationship } from '../core/instagram-web';
 import { getCookie } from '../utils/utils';
 import { loadTimings, loadWhitelist } from '../utils/storage';
 import { STORAGE_KEY } from '../messages';
@@ -95,6 +96,14 @@ function startHost() {
         lastRequestAt = Date.now();
         if (job)
             assertAccount(job.accountId);
+        if (url.endsWith('/api/graphql') && init.method === 'POST') {
+            const target = JSON.parse(new URLSearchParams(String(init.body)).get('variables') ?? '{}').target_user_id;
+            if ((await loadWhitelist()).some(w => w.id === target))
+                throw new Error('Account was protected before dispatch; no unfollow was sent.');
+            signal.throwIfAborted();
+            if (job)
+                assertAccount(job.accountId);
+        }
         try {
             return await readJSON(url, signal, init);
         }
@@ -105,39 +114,30 @@ function startHost() {
             throw e;
         }
     }
-    async function graph(id: string, phase: string, signal: AbortSignal, cursor?: string, countOnly = false) {
+    function profile() { return ownProfile(document, location.pathname); }
+    async function list(id: string, kind: ListKind, expected: number, signal: AbortSignal, cursor?: string) {
         assertAccount(id);
         while (paused)
             await wait(250, signal);
-        const hash = phase === 'following' ? '3dec7e2c57367ef3da3d987d89f9dbc8' : 'c76146de99bb02f6415203be841dd25a';
-        const field = phase === 'following' ? 'edge_follow' : 'edge_followed_by';
-        const variables = { id, include_reel: true, fetch_mutual: false, first: countOnly ? 1 : 24, ...(cursor ? { after: cursor } : {}) };
-        const json = await request(`https://www.instagram.com/graphql/query/?query_hash=${hash}&variables=${encodeURIComponent(JSON.stringify(variables))}`, signal);
-        if (json.data?.user?.id !== undefined && String(json.data.user.id) !== id)
-            throw new Error('Instagram returned a different account');
-        return json.data?.user?.[field];
+        return restPage(await request(listURL(id, kind, cursor), signal, { headers: webHeaders(getCookie('csrftoken')) }), expected);
     }
     async function scan(id: string, ac: AbortController) {
         try {
             const h = await history(id);
+            const before = profile();
             const timings = await loadTimings();
             const delay = Math.min(3600000, Math.max(1000, Number.isFinite(timings?.timeBetweenSearchCycles) ? timings!.timeBetweenSearchCycles : 1000));
             const lists: Record<string, any> = {};
-            for (const phase of ['followers', 'following']) {
+            for (const phase of ['followers', 'following'] as const) {
                 await progress({ phase, received: 0, total: 0 });
-                lists[phase] = await collectPages(cursor => graph(id, phase, ac.signal, cursor), ac.signal, async (received, total) => { assertAccount(id); await progress({ received, total }); await app({ percentage: Math.min(99, Math.round(received / Math.max(total, 1) * 50) + (phase === 'following' ? 50 : 0)) }); }, delay, Math.min(3600000, Number.isFinite(timings?.timeToWaitAfterFiveSearchCycles) ? timings!.timeToWaitAfterFiveSearchCycles : 10000));
+                lists[phase] = await collectPages(cursor => list(id, phase, before[phase], ac.signal, cursor), ac.signal, async (received, total) => { assertAccount(id); await progress({ received, total }); await app({ percentage: Math.min(99, Math.round(received / Math.max(total, 1) * 50) + (phase === 'following' ? 50 : 0)) }); }, delay, Math.min(3600000, Number.isFinite(timings?.timeToWaitAfterFiveSearchCycles) ? timings!.timeToWaitAfterFiveSearchCycles : 10000));
             }
-            // Closing checks use the same web GraphQL interface. The old mandatory mobile-style
-            // /api/v1/users/:id/info/ probe could return 429 before any relationship page was fetched.
-            await progress({ phase: 'count_recheck' });
-            for (const phase of ['followers', 'following']) {
-                const closing = await graph(id, phase, ac.signal, undefined, true);
-                if (!closing || !Number.isSafeInteger(closing.count) || closing.count !== lists[phase].length)
-                    throw new Error('Account counts changed or disagree with scan. Retry a complete scan.');
-                await wait(delay, ac.signal);
-            }
+            await progress({ phase: 'validating' });
+            const after = profile();
             ac.signal.throwIfAborted();
             assertAccount(id);
+            if (after.username !== before.username || after.followers !== before.followers || after.following !== before.following)
+                throw new Error('Profile counts changed during scan. No snapshot saved; refresh and retry later.');
             const latest: Snapshot = { schemaVersion: 1, accountId: id, capturedAt: new Date().toISOString(), complete: true, followers: lists.followers, following: lists.following };
             const followerIds = new Set(latest.followers.map(u => u.id));
             const completed = { ...job!, status: 'complete', complete: true, finishedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
@@ -167,20 +167,20 @@ function startHost() {
                 ac.signal.throwIfAborted();
                 if ((await loadWhitelist()).some(w => w.id === u.id))
                     throw new Error('Account was whitelisted; stopped.');
-                const relationship = async (id: string) => {
+                const relationship = async (targetId: string) => {
                     assertAccount(p.accountId);
-                    const j = await request(`https://www.instagram.com/api/v1/friendships/show/${id}/`, ac.signal, { headers: { 'x-ig-app-id': '936619743392459' } });
-                    const r = j.friendship_status ?? j;
-                    if (typeof r.following !== 'boolean' || typeof r.followed_by !== 'boolean')
-                        throw new Error('Relationship unavailable or inconclusive');
-                    return r;
+                    const j = await request('https://www.instagram.com/api/v1/friendships/show_many/', ac.signal, { method: 'POST', headers: { ...webHeaders(getCookie('csrftoken')), 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ user_ids: targetId }).toString() });
+                    return batchRelationship(j, targetId);
                 };
-                await mutateOne(u.id, relationship, async (id) => {
+                await mutateOne(u.id, relationship, async (targetId) => {
                     assertAccount(p.accountId);
                     const csrf = getCookie('csrftoken');
                     if (!csrf)
                         throw new Error('Missing login/CSRF token');
-                    await request(`https://www.instagram.com/web/friendships/${id}/unfollow/`, ac.signal, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', 'x-csrftoken': csrf } });
+                    const mutation = unfollowRequest(p.accountId, targetId, document.documentElement.innerHTML, csrf);
+                    const j = await request(mutation.url, ac.signal, mutation.init);
+                    if (!j.data || typeof j.data !== 'object')
+                        throw new Error('Unfollow response is unverified; stopped. Inspect Instagram before retrying.');
                 });
                 log.push({ user: u, unfollowedSuccessfully: true });
                 await progress({ received: i + 1, total: p.users.length });
@@ -219,10 +219,19 @@ function startHost() {
         if (type === 'GET_STATUS' || type === 'instagram_get_status') {
             if (type.startsWith('instagram_'))
                 validateInput(type, input);
+            let profileState: any;
+            try {
+                profileState = { ready: true, ...profile() };
+            }
+            catch (e) {
+                profileState = { ready: false, message: e instanceof Error ? e.message : String(e) };
+            }
             const id = getCookie('ds_user_id');
             if (active && job?.accountId !== id)
                 active.abort(new Error('Instagram account changed during job'));
             if (preparation && preparation.accountId !== id)
+                preparation = undefined;
+            if (preparation && (await loadWhitelist()).some(w => preparation!.users.some(u => u.id === w.id)))
                 preparation = undefined;
             const h = isId(id) ? await history(id) : {};
             const stored = (await chrome.storage.local.get(STORAGE_KEY))[STORAGE_KEY];
@@ -232,10 +241,9 @@ function startHost() {
                 const ids = new Set(h.latest?.followers.map(u => u.id) ?? []);
                 await app({ accountId: id, status: active ? 'scanning' : h.latest ? 'scanning_done' : 'idle', percentage: h.latest ? 100 : 0, results: h.latest?.following.map(u => ({ ...u, follows_viewer: ids.has(u.id), followed_by_viewer: true, is_private: u.is_private ?? false, is_verified: u.is_verified ?? false })) ?? [], selectedIds: [], unfollowLog: [] });
             }
-            return { accountId: isId(id) ? id : null, login: isId(id) ? 'cookie present; account validation not confirmed by this status call' : 'logged out', job: job ?? null, latestAt: h.latest?.capturedAt ?? null, baselineAt: h.previous?.capturedAt ?? null, firstScanEstablishesHistory: !h.previous, preparation: preparation ?? null, rateLimit: await rateLimit(), recovery };
+            return { accountId: isId(id) ? id : null, login: isId(id) ? 'cookie present; account validation not confirmed by this status call' : 'logged out', job: job ?? null, latestAt: h.latest?.capturedAt ?? null, baselineAt: h.previous?.capturedAt ?? null, firstScanEstablishesHistory: !h.previous, preparation: preparation ?? null, profile: profileState, rateLimit: await rateLimit(), recovery };
         }
-        if (type === 'PING')
-            return { alive: true, job: job ?? null };
+        if (type === 'PING') {let ready=false;try{profile();ready=true}catch{}return {alive:true,job:job??null,profileReady:ready,accountId:getCookie('ds_user_id')};}
         if (type === 'STOP_UNFOLLOW' || type === 'instagram_cancel_scan') {
             if (type.startsWith('instagram_')) {
                 validateInput(type, input);
@@ -261,6 +269,7 @@ function startHost() {
             if (busy)
                 throw new Error('A job is already active');
             await assertNotBlocked();
+            profile();
             busy = true;
             paused = false;
             preparation = undefined;
@@ -301,6 +310,10 @@ function startHost() {
             return { success: true };
         }
         if (type === 'APPROVE_PREPARATION') {
+            if (preparation && (await loadWhitelist()).some(w => preparation!.users.some(u => u.id === w.id))) {
+                preparation = undefined;
+                throw new Error('Prepared list changed: an account is now protected. Prepare a fresh list.');
+            }
             if (busy || !preparation || input.preparationId !== preparation.id || preparation.consumed || Date.now() - Date.parse(preparation.createdAt) > 600000 || preparation.accountId !== id || preparation.snapshotAt !== h.latest?.capturedAt)
                 throw new Error('Preparation changed or expired; prepare again');
             preparation = { ...preparation, approvedAt: new Date().toISOString() };
@@ -325,6 +338,10 @@ function startHost() {
             if (busy)
                 throw new Error('A job is already active');
             await assertNotBlocked();
+            if (preparation && (await loadWhitelist()).some(w => preparation!.users.some(u => u.id === w.id))) {
+                preparation = undefined;
+                throw new Error('Prepared list contains a protected account; prepare a new list.');
+            }
             preparation = authorize(preparation, input.preparationId, id, h.latest.capturedAt);
             busy = true;
             const ac = new AbortController();

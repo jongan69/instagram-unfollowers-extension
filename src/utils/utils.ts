@@ -163,20 +163,3 @@ export function getCookie(name: string): string | null {
   if (parts.length !== 2) return null;
   return parts.pop()!.split(";").shift()!;
 }
-
-export function urlGenerator(
-  cookieReader: (name: string) => string | null,
-  nextCode?: string
-): string {
-  const dsUserId = cookieReader("ds_user_id");
-  const base =
-    "https://www.instagram.com/graphql/query/?query_hash=3dec7e2c57367ef3da3d987d89f9dbc8";
-  if (!nextCode) {
-    return `${base}&variables={"id":"${dsUserId}","include_reel":"true","fetch_mutual":"false","first":"24"}`;
-  }
-  return `${base}&variables={"id":"${dsUserId}","include_reel":"true","fetch_mutual":"false","first":"24","after":"${nextCode}"}`;
-}
-
-export function unfollowUserUrlGenerator(idToUnfollow: string): string {
-  return `https://www.instagram.com/web/friendships/${idToUnfollow}/unfollow/`;
-}

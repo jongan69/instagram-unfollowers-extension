@@ -1,3 +1,12 @@
+## 1.2.0
+
+- Replace obsolete GraphQL list hashes with native REST relationship lists, web request headers, max_id pagination and stable pk_id/pk mapping, informed by davidarroyo1234/InstagramUnfollowers.
+- Require independent exact own-profile totals; reject truncated, empty-positive, malformed and stalled scans; preserve complete snapshots atomically.
+- Replace the obsolete unfollow route with the modern GraphQL request format, current in-page tokens, fresh batch relationship checks and verified outcomes. Preserve explicit single-use approval and stop on all restrictions.
+- Add responsive review workbench: readable status/progress, search, paginated accounts, protected connections, per-account reasons, exact-list approval, history and backups. Technical JSON is collapsed.
+- Preserve reason focus across polling; invalidate prepared lists when protected connections change; repair Stop for paused scans.
+- Retain manual operation without WebMCP, add current REST/browser regression coverage and include upstream MIT attribution in the package.
+
 ## 1.1.1
 
 - Fix the reproduced Chrome 156 WebMCP document.domain registration error with extension cross-origin isolation.
